@@ -431,9 +431,26 @@ function load(){
     if(saved.assets) for(var a in saved.assets) if(saved.assets[a]) state.assets[a]=saved.assets[a];
   }
 }
+function embeddedBytes(){
+  var n=0;
+  (state.photos||[]).forEach(function(p){ if(/^data:/.test(p.src||"")) n+=p.src.length; });
+  (state.merch||[]).forEach(function(m){ if(/^data:/.test(m.img||"")) n+=m.img.length; });
+  ["badge","mascot"].forEach(function(k){ if(/^data:/.test(state.assets[k]||"")) n+=state.assets[k].length; });
+  return Math.round(n*0.75);
+}
+function mb(n){ return (n/1048576).toFixed(1)+" MB"; }
+/* Returns "full" if everything persisted, "lite" if only the text did,
+   "none" if the browser refused storage outright. */
 function save(){
-  try{ localStorage.setItem(KEY, JSON.stringify(state)); return true; }
-  catch(e){ return false; }
+  try{ localStorage.setItem(KEY, JSON.stringify(state)); return "full"; }
+  catch(e){
+    var lite=clone(state);
+    lite.photos=(lite.photos||[]).filter(function(x){ return !/^data:/.test(x.src||""); });
+    lite.merch=(lite.merch||[]).map(function(m){ if(/^data:/.test(m.img||"")) m.img=""; return m; });
+    lite.assets={badge:"",mascot:""};
+    try{ localStorage.setItem(KEY, JSON.stringify(lite)); return "lite"; }
+    catch(e2){ return "none"; }
+  }
 }
 
 /* ===================== theme ===================== */
@@ -684,7 +701,7 @@ function buildAdmin(){
     "For the player: on Spotify use Share, then Embed, and copy the src address. For YouTube use https://www.youtube.com/embed/VIDEO_ID.");
   buildList("photos","#p-photos",[["src","Photo","image"],["caption","Caption","text"]],
     function(){return {src:"",caption:""};},"Add photo",
-    "Uploads are shrunk to 1600px and stored inside the page, so a handful of photos is fine but a hundred will make the file slow.");
+    "Uploads are shrunk to 1400px and held inside the page while you work. Once you have the ones you want, click Save photos as files, put them in an images folder next to index.html in your repo, then Download updated site. That keeps the page small and fast on phones.");
   buildList("merch","#p-merch",[["name","Item","text"],["price","Price","text"],["img","Photo","image"],["url","Buy link","url"],["note","Description","textarea"]],
     function(){return {name:"New item",price:"",img:"",url:"",note:""};},"Add merch item",
     "Leave the buy link blank and the item points people at your contact form instead.");
@@ -781,7 +798,7 @@ function buildList(key,sel,defs,maker,addLabel,hint){
         inp=el("div");
         if(item[name]){ var im=el("img"); im.src=item[name]; im.style.maxHeight="80px"; im.style.marginBottom="6px"; inp.appendChild(im); }
         var up=el("button",{class:"mini"},item[name]?"Replace":"Upload");
-        up.onclick=function(){ pickImages(false,function(urls){ item[name]=urls[0]; buildList(key,sel,defs,maker,addLabel,hint); renderAll(); }); };
+        up.onclick=function(){ pickImages(false,function(urls){ item[name]=urls[0]; buildList(key,sel,defs,maker,addLabel,hint); renderAll(); }, key==="photos"); };
         var url=el("input",{type:"url",placeholder:"or paste an image URL"}); url.value=/^data:/.test(item[name]||"")?"":(item[name]||"");
         url.oninput=function(){ item[name]=url.value.trim(); renderAll(); };
         inp.appendChild(up); inp.appendChild(url);
@@ -802,37 +819,67 @@ function buildList(key,sel,defs,maker,addLabel,hint){
   if(key==="photos"){
     var many=el("button",{class:"mini"},"Upload several at once"); many.style.marginLeft="8px";
     many.onclick=function(){ pickImages(true,function(urls){ urls.forEach(function(u){ state.photos.push({src:u,caption:""}); });
-      buildList(key,sel,defs,maker,addLabel,hint); renderAll(); }); };
+      buildList(key,sel,defs,maker,addLabel,hint); renderAll(); },true); };
     p.appendChild(many);
+    var out=el("button",{class:"mini"},"Save photos as files"); out.style.marginLeft="8px";
+    out.onclick=photosAsFiles; p.appendChild(out);
+    var bytes=embeddedBytes();
+    var meter=el("p",{class:"hint"},"Embedded images right now: <strong>"+mb(bytes)+"</strong>. "+
+      (bytes>3.2*1048576
+        ? "That is past what browsers will hold, so Save changes can only keep your text. Use Save photos as files."
+        : "Browsers stop storing somewhere around 5 MB, so pull photos out to files before you get close."));
+    meter.style.marginTop="14px"; p.appendChild(meter);
   }
 }
 
 /* ---- image picking, downscaled so the file stays sane ---- */
-function pickImages(multi,cb){
+function pickImages(multi,cb,forPhoto){
   var f=$("#filePick"); f.multiple=!!multi; f.value="";
   f.onchange=function(){
     var files=Array.prototype.slice.call(f.files); if(!files.length)return;
-    Promise.all(files.map(shrink)).then(cb);
+    Promise.all(files.map(function(x){ return shrink(x,forPhoto); })).then(cb);
   };
   f.click();
 }
-function shrink(file){
+function shrink(file,forPhoto){
   return new Promise(function(res){
     var fr=new FileReader();
     fr.onload=function(){
       var img=new Image();
       img.onload=function(){
-        var max=1600, w=img.width, h=img.height;
+        var max=forPhoto?1400:1600, w=img.width, h=img.height;
         if(Math.max(w,h)>max){ var k=max/Math.max(w,h); w=Math.round(w*k); h=Math.round(h*k); }
         var c=document.createElement("canvas"); c.width=w; c.height=h;
-        c.getContext("2d").drawImage(img,0,0,w,h);
-        var isPng=/png$/i.test(file.type);
-        res(c.toDataURL(isPng?"image/png":"image/jpeg", isPng?undefined:0.85));
+        var ctx=c.getContext("2d");
+        var keepPng = /png$/i.test(file.type) && !forPhoto;
+        if(!keepPng){ ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,w,h); }  // no black behind transparency
+        ctx.drawImage(img,0,0,w,h);
+        res(keepPng ? c.toDataURL("image/png") : c.toDataURL("image/jpeg",0.72));
       };
       img.onerror=function(){ res(fr.result); };
       img.src=fr.result;
     };
     fr.readAsDataURL(file);
+  });
+}
+/* Pull embedded photos back out as real image files and repoint the
+   page at images/, which is what keeps the HTML small enough to store. */
+function photosAsFiles(){
+  var idx=[];
+  (state.photos||[]).forEach(function(p,i){ if(/^data:/.test(p.src||"")) idx.push(i); });
+  if(!idx.length){ flash("No embedded photos to pull out",true); return; }
+  idx.forEach(function(i,n){
+    setTimeout(function(){
+      var p=state.photos[i];
+      var ext=/^data:image\/png/.test(p.src)?"png":"jpg";
+      var name="photo-"+(i+1)+"."+ext;
+      var a=el("a"); a.href=p.src; a.download=name; a.click();
+      p.src="images/"+name;
+      if(n===idx.length-1) setTimeout(function(){
+        buildAdmin(); renderAll();
+        flash(idx.length+" photos saved. Put them in an images folder in your repo.");
+      },500);
+    }, n*400);
   });
 }
 
@@ -846,8 +893,10 @@ function flash(msg,bad){
 }
 $("#aSave").addEventListener("click",function(){
   renderAll();
-  var ok=save();
-  flash(ok ? "Saved in this browser" : "Could not save here, use Download updated site", !ok);
+  var r=save();
+  if(r==="full") flash("Saved in this browser");
+  else if(r==="lite") flash("Text saved. Browser storage is full, so the images ("+mb(embeddedBytes())+") live only in this tab. Download updated site now to keep them.",true);
+  else flash("This browser is blocking storage. Download updated site to keep your changes.",true);
 });
 $("#aDownload").addEventListener("click",function(){
   fetch(location.href,{cache:"no-store"}).then(function(r){ return r.text(); }).then(function(html){
