@@ -1,0 +1,54 @@
+{
+  // Flannel Trappe - Cloudflare Worker configuration.
+  //
+  // This project is a WORKER WITH STATIC ASSETS, not a Pages project.
+  // That is why the deploy command is "npx wrangler deploy". The keys
+  // below are the Workers ones; "pages_build_output_dir" is a Pages key
+  // and would fail the build.
+  //
+  // Cloudflare reads bindings from this file, so the dashboard binding
+  // screens are bypassed entirely.
+
+  "$schema": "node_modules/wrangler/config-schema.json",
+
+  // Must match the Worker name in the dashboard breadcrumb.
+  "name": "flanneltrappe",
+
+  // The Worker itself. Handles /api/* and defers everything else
+  // to the static files.
+  "main": "src/index.js",
+
+  "compatibility_date": "2026-08-01",
+
+  // The static site. Files here are served straight from the edge
+  // without invoking the Worker, so the page costs nothing to serve.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+
+  "kv_namespaces": [
+    {
+      "binding": "SITE_KV",
+      "id": "d6b1e8ba35f44abf89db3c39e8b5341b"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "SITE_R2",
+      "bucket_name": "flanneltrappe-media"
+    }
+  ],
+
+  "vars": {
+    // SHA-256 hex of your publish key. Safe to commit: it cannot be
+    // reversed into the key. Regenerate with:
+    //     echo -n "your-publish-key" | shasum -a 256
+    "ADMIN_KEY_SHA256": "e3ac8ae61c03d626a42b5ace3cd8c5a320dbabb21b6cb8e8b7cc9f783ab81798"
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}
