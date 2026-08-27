@@ -24,7 +24,7 @@
   "kv_namespaces": [
     {
       "binding": "SITE_KV",
-      "id": "PASTE_KV_NAMESPACE_ID_HERE"
+      "id": "d6b1e8ba35f44abf89db3c39e8b5341b"
     }
   ],
 
@@ -48,6 +48,6 @@
     // Publishing this hash is safe. It cannot be reversed into the key,
     // so long as the key is long and random rather than a dictionary
     // word. Make it 20+ characters of nonsense.
-    "ADMIN_KEY_SHA256": "PASTE_SHA256_HASH_HERE"
+    "ADMIN_KEY_SHA256": "e3ac8ae61c03d626a42b5ace3cd8c5a320dbabb21b6cb8e8b7cc9f783ab81798"
   }
 }
