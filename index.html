@@ -371,8 +371,8 @@ footer{border-top:var(--rule);padding-block:26px}
 <div class="admin" id="admin">
   <div class="admin-bar">
     <h2>Band admin</h2>
-    <button class="mini" id="aSave">Save changes</button>
-    <button class="mini" id="aDownload">Download updated site</button>
+    <button class="mini" id="aSave">Publish live</button>
+    <button class="mini" id="aDownload">Download copy</button>
     <button class="mini" id="aExport">Export backup</button>
     <button class="mini" id="aImport">Import backup</button>
     <button class="mini" id="aReset">Reset</button>
@@ -413,10 +413,50 @@ function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
   return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
 
-var KEY = "flanneltrappe.site.v1";
+var KEY  = "flanneltrappe.site.v1";
+var AKEY = "flanneltrappe.adminkey";
 var BASE = JSON.parse($("#site-config").textContent);
 var state;
+var online = false;          // did /api/site answer this page load
+var adminKey = "";           // server publish key, kept only in this browser
 
+try{ adminKey = sessionStorage.getItem(AKEY) || localStorage.getItem(AKEY) || ""; }catch(e){}
+
+function api(path,opts){
+  opts = opts || {};
+  opts.headers = opts.headers || {};
+  if(adminKey) opts.headers["X-Admin-Key"] = adminKey;
+  // Always hand back a promise, even if fetch is missing or throws
+  // synchronously, so no caller can be killed by an unexpected raise.
+  try{
+    if(typeof fetch!=="function") return Promise.reject(new Error("fetch unavailable"));
+    return Promise.resolve(fetch("/api/"+path, opts));
+  }catch(e){ return Promise.reject(e); }
+}
+
+/* Published content wins. The local copy is only a fallback for when
+   the API is unreachable, e.g. the file opened straight off disk. */
+function loadRemote(){
+  return api("site").then(function(r){
+    if(!r.ok) throw new Error("no published content");
+    return r.json();
+  }).then(function(d){
+    online = true;
+    state = clone(BASE);
+    merge(d);
+    return true;
+  }).catch(function(){ return false; });
+}
+function merge(saved){
+  if(!saved) return;
+  ["identity","theme","forms"].forEach(function(k){
+    if(saved[k]) for(var f in saved[k]) state[k][f]=saved[k][f];
+  });
+  ["socials","shows","tracks","photos","merch","embeds"].forEach(function(k){
+    if(Array.isArray(saved[k])) state[k]=saved[k];
+  });
+  if(saved.assets) for(var a in saved.assets) if(saved.assets[a]) state.assets[a]=saved.assets[a];
+}
 function load(){
   var saved=null;
   try{ var raw=localStorage.getItem(KEY); if(raw) saved=JSON.parse(raw); }catch(e){}
@@ -439,6 +479,23 @@ function embeddedBytes(){
   return Math.round(n*0.75);
 }
 function mb(n){ return (n/1048576).toFixed(1)+" MB"; }
+/* Push the current content to KV so every visitor sees it. */
+function publish(){
+  return api("site",{
+    method:"PUT",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(state)
+  }).then(function(r){
+    return r.json().catch(function(){ return {}; }).then(function(d){
+      if(r.ok) return {ok:true};
+      if(r.status===401) return {ok:false, msg:"Publish key was rejected. Unlock again."};
+      return {ok:false, msg:(d && d.error) ? d.error : ("Publish failed with status "+r.status)};
+    });
+  }).catch(function(){
+    return {ok:false, msg:"Could not reach the site API. Are you on the live site?"};
+  });
+}
+
 /* Returns "full" if everything persisted, "lite" if only the text did,
    "none" if the browser refused storage outright. */
 function save(){
@@ -669,9 +726,25 @@ document.addEventListener("keydown",function(e){
 });
 if(location.hash==="#admin") openAdmin();
 $("#gateGo").addEventListener("click",function(){
-  if($("#gatePass").value===String(state.identity.adminPass||"trappe")){
-    unlocked=true; $("#gate").hidden=true; $("#adminBody").hidden=false; buildAdmin();
-  } else { $("#gateMsg").className="form-msg err"; $("#gateMsg").textContent="That passcode did not match."; }
+  var typed=$("#gatePass").value, msg=$("#gateMsg");
+  msg.className="form-msg"; msg.textContent="Checking...";
+  var prev=adminKey; adminKey=typed;
+  api("auth",{method:"POST"}).then(function(r){
+    if(r.ok){
+      try{ sessionStorage.setItem(AKEY,typed); }catch(e){}
+      unlocked=true; msg.textContent=""; $("#gate").hidden=true; $("#adminBody").hidden=false; buildAdmin();
+      return;
+    }
+    adminKey=prev;
+    if(r.status===503){ msg.className="form-msg err"; msg.textContent="ADMIN_KEY is not set on the Cloudflare project yet."; }
+    else { msg.className="form-msg err"; msg.textContent="That key did not match."; }
+  }).catch(function(){
+    // No API reachable, e.g. the file was opened from disk. Offline editing only.
+    adminKey=prev;
+    if(typed===String(state.identity.adminPass||"trappe")){
+      unlocked=true; msg.textContent=""; $("#gate").hidden=true; $("#adminBody").hidden=false; buildAdmin();
+    } else { msg.className="form-msg err"; msg.textContent="No connection to the site API, and the offline passcode did not match."; }
+  });
 });
 $("#gatePass").addEventListener("keydown",function(e){ if(e.key==="Enter") $("#gateGo").click(); });
 
@@ -679,7 +752,9 @@ var TABS=[["site","Band info"],["theme","Colors"],["socials","Social links"],["s
           ["music","Music"],["photos","Photos"],["merch","Merch"],["embeds","Embeds"]];
 
 function buildAdmin(){
-  $("#saveHint").innerHTML = "Changes save to this browser right away so you can preview them. To put them on the live site, hit <code>Download updated site</code> and upload the new <code>index.html</code> to your host.";
+  $("#saveHint").innerHTML = online
+    ? "Edits preview instantly in this browser. Hit <code>Publish live</code> to push them to the server, and every visitor on every device sees them straight away."
+    : "<strong>Not connected to the site API.</strong> You are editing a local copy, so <code>Publish live</code> will fail. Open the admin panel on the live site instead.";
   var t=$("#tabs"); t.innerHTML="";
   TABS.forEach(function(pair,i){
     var b=el("button",{class:"tab"+(i===0?" on":""),"data-t":pair[0]},pair[1]);
@@ -701,7 +776,7 @@ function buildAdmin(){
     "For the player: on Spotify use Share, then Embed, and copy the src address. For YouTube use https://www.youtube.com/embed/VIDEO_ID.");
   buildList("photos","#p-photos",[["src","Photo","image"],["caption","Caption","text"]],
     function(){return {src:"",caption:""};},"Add photo",
-    "Uploads are shrunk to 1400px and held inside the page while you work. Once you have the ones you want, click Save photos as files, put them in an images folder next to index.html in your repo, then Download updated site. That keeps the page small and fast on phones.");
+    "Uploads are shrunk to 1400px and sent straight to Cloudflare R2. Add them, caption them, then hit Publish live. Nothing to download and nothing to commit.");
   buildList("merch","#p-merch",[["name","Item","text"],["price","Price","text"],["img","Photo","image"],["url","Buy link","url"],["note","Description","textarea"]],
     function(){return {name:"New item",price:"",img:"",url:"",note:""};},"Add merch item",
     "Leave the buy link blank and the item points people at your contact form instead.");
@@ -824,10 +899,9 @@ function buildList(key,sel,defs,maker,addLabel,hint){
     var out=el("button",{class:"mini"},"Save photos as files"); out.style.marginLeft="8px";
     out.onclick=photosAsFiles; p.appendChild(out);
     var bytes=embeddedBytes();
-    var meter=el("p",{class:"hint"},"Embedded images right now: <strong>"+mb(bytes)+"</strong>. "+
-      (bytes>3.2*1048576
-        ? "That is past what browsers will hold, so Save changes can only keep your text. Use Save photos as files."
-        : "Browsers stop storing somewhere around 5 MB, so pull photos out to files before you get close."));
+    var meter=el("p",{class:"hint"}, bytes>0
+      ? "Still held inside the page: <strong>"+mb(bytes)+"</strong>. Those did not reach storage. Unlock the admin panel on the live site and re-upload them, or use Save photos as files as a fallback."
+      : "All photos are in Cloudflare storage. Nothing is weighing down the page.");
     meter.style.marginTop="14px"; p.appendChild(meter);
   }
 }
@@ -837,9 +911,31 @@ function pickImages(multi,cb,forPhoto){
   var f=$("#filePick"); f.multiple=!!multi; f.value="";
   f.onchange=function(){
     var files=Array.prototype.slice.call(f.files); if(!files.length)return;
-    Promise.all(files.map(function(x){ return shrink(x,forPhoto); })).then(cb);
+    flash("Uploading "+files.length+" image"+(files.length>1?"s":"")+"...");
+    Promise.all(files.map(function(x){
+      return shrink(x,forPhoto).then(function(dataUrl){ return store(dataUrl,x.name); });
+    })).then(function(urls){
+      var inline=urls.filter(function(u){ return /^data:/.test(u); }).length;
+      flash(inline ? "Uploaded, but "+inline+" stayed inside the page. R2 was unreachable." : "Uploaded to storage");
+      cb(urls);
+    });
   };
   f.click();
+}
+/* Send an image to R2 and hand back its public path. If anything goes
+   wrong we keep the data URL so the upload is never simply lost. */
+function store(dataUrl,name){
+  if(!/^data:/.test(dataUrl)) return Promise.resolve(dataUrl);
+  if(!adminKey) return Promise.resolve(dataUrl);
+  var m=/^data:([^;]+);base64,(.*)$/.exec(dataUrl);
+  if(!m) return Promise.resolve(dataUrl);
+  var type=m[1], bin=atob(m[2]), buf=new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i);
+  return api("upload?name="+encodeURIComponent(name||"photo"),{
+    method:"POST", headers:{"Content-Type":type}, body:buf
+  }).then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){ return (d && d.url) ? d.url : dataUrl; })
+    .catch(function(){ return dataUrl; });
 }
 function shrink(file,forPhoto){
   return new Promise(function(res){
@@ -892,11 +988,13 @@ function flash(msg,bad){
   b.appendChild(s); setTimeout(function(){ s.remove(); },4000);
 }
 $("#aSave").addEventListener("click",function(){
-  renderAll();
-  var r=save();
-  if(r==="full") flash("Saved in this browser");
-  else if(r==="lite") flash("Text saved. Browser storage is full, so the images ("+mb(embeddedBytes())+") live only in this tab. Download updated site now to keep them.",true);
-  else flash("This browser is blocking storage. Download updated site to keep your changes.",true);
+  renderAll(); save();
+  var b=$("#aSave"); b.disabled=true; flash("Publishing...");
+  publish().then(function(res){
+    b.disabled=false;
+    if(res.ok){ online=true; flash("Published. Everyone sees this now."); }
+    else flash(res.msg,true);
+  });
 });
 $("#aDownload").addEventListener("click",function(){
   fetch(location.href,{cache:"no-store"}).then(function(r){ return r.text(); }).then(function(html){
@@ -929,13 +1027,18 @@ $("#aImport").addEventListener("click",function(){
   f.click();
 });
 $("#aReset").addEventListener("click",function(){
-  if(!confirm("Throw away every change made in this browser and go back to the published site?"))return;
+  if(!confirm("Throw away every unpublished change in this browser and reload the published site?"))return;
   try{ localStorage.removeItem(KEY); }catch(e){}
-  load(); renderAll(); buildAdmin(); flash("Back to the published version");
+  load(); renderAll();
+  loadRemote().then(function(ok){ renderAll(); buildAdmin();
+    flash(ok ? "Reloaded the published version" : "No published content found, showing the built-in copy"); });
 });
 
 /* ===================== go ===================== */
-load(); renderAll();
+load(); renderAll();                       // paint immediately from the file
+loadRemote().then(function(ok){            // then swap in published content
+  if(ok) renderAll();
+});
 })();
 </script>
 </body>
