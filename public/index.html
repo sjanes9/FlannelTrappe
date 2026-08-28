@@ -54,7 +54,7 @@
     { "name": "TikTok",    "url": "", "icon": "tiktok" }
   ],
   "shows": [
-    { "date": "2026-09-19", "venue": "Add your first show", "city": "Lexington, KY", "time": "9:00 PM", "tickets": "", "note": "Edit or delete this in the admin panel" }
+    { "date": "2026-09-19", "venue": "Add your first show", "city": "Lexington, KY", "time": "9:00 PM", "address": "", "phone": "", "photo": "", "tickets": "", "note": "Edit or delete this in the admin panel" }
   ],
   "tracks": [
     { "title": "Add a song", "note": "Paste a Spotify, YouTube, or Bandcamp embed URL in the admin panel and it plays right here.", "embed": "", "height": 152, "links": [] }
@@ -157,10 +157,19 @@ body[data-plaid="none"] .plaid{background-color:var(--bg);background-image:none}
 .empty strong{display:block;color:var(--text);font-family:var(--display);font-size:19px;margin-bottom:5px}
 
 /* SHOWS */
-.show{display:grid;grid-template-columns:140px 1fr auto;gap:6px 22px;align-items:center;padding:19px 0;border-bottom:var(--rule)}
-.show-date{font-family:var(--mono);font-size:13px;color:var(--accent);letter-spacing:.03em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.show{display:grid;grid-template-columns:140px 1fr auto;gap:6px 22px;align-items:center;padding:22px 0;border-bottom:var(--rule)}
+.show-date{font-family:var(--mono);font-size:13px;color:var(--accent);letter-spacing:.03em;font-variant-numeric:tabular-nums;white-space:nowrap;align-self:start;padding-top:4px}
+.show-body{display:flex;gap:18px;align-items:flex-start}
+.show-thumb{width:112px;flex:none;aspect-ratio:4/3;overflow:hidden;border:var(--rule);background:var(--surface)}
+.show-thumb img{width:100%;height:100%;object-fit:cover}
+.show-text{min-width:0}
 .show-venue{font-family:var(--display);font-weight:700;font-size:clamp(19px,2.5vw,26px);line-height:1.2}
 .show-meta{font-size:14px;color:var(--muted);margin-top:2px}
+.show-details{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:9px}
+.show-detail{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;color:var(--muted);text-decoration:none;transition:color .18s}
+.show-detail:hover{color:var(--accent)}
+.show-detail svg{width:14px;height:14px;fill:currentColor;flex:none;opacity:.8}
+.show-note{font-size:13.5px;color:var(--muted);margin-top:8px;font-style:italic;opacity:.85}
 .show-link{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;text-decoration:none;padding:10px 15px;border:1px solid color-mix(in srgb,var(--text) 30%,transparent);white-space:nowrap;transition:.18s}
 .show-link:hover{border-color:var(--accent);color:var(--accent)}
 .show.past{opacity:.4}.show.past .show-date{color:var(--muted)}
@@ -207,9 +216,20 @@ body[data-plaid="none"] .plaid{background-color:var(--bg);background-image:none}
 .merch-img .ph{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
 .price{font-family:var(--mono);color:var(--accent);font-size:15px}
 
-/* FEED */
-.feed{display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));align-items:start}
-.feed-item{background:var(--surface);border:var(--rule);padding:14px;overflow:auto}
+/* FEED
+   One embed used to sit in a two-column grid and leave half the section
+   empty. Now the follow panel is the last grid cell, so whatever the
+   embed count, the row fills. */
+.feed-intro{max-width:60ch;color:var(--muted);margin-bottom:26px;font-size:16.5px}
+.feed{display:grid;gap:20px;grid-template-columns:repeat(auto-fill,minmax(322px,1fr));align-items:start}
+.feed-item{background:var(--surface);border:var(--rule);padding:14px;display:flex;justify-content:center;overflow-x:auto}
+.feed-item > *{max-width:100%}
+.feed-follow{background:var(--surface);border:var(--rule);padding:24px 22px;display:flex;flex-direction:column;gap:14px}
+.feed-follow h3{font-family:var(--display);font-weight:800;font-stretch:88%;font-size:24px;text-transform:uppercase;line-height:1.05}
+.feed-follow p{font-size:14.5px;color:var(--muted)}
+.feed-follow .social-row{gap:8px}
+.feed-follow .social{padding:11px 15px;font-size:11px}
+.feed-cta{margin-top:auto;display:flex;flex-wrap:wrap;gap:9px;padding-top:6px}
 
 /* FORMS */
 .form-cols{display:grid;gap:34px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
@@ -278,8 +298,10 @@ footer{border-top:var(--rule);padding-block:26px}
 @media (max-width:860px){
   .hero-in{grid-template-columns:1fr;min-height:auto;text-align:left}
   .mascot{max-height:300px;margin-top:8px;justify-self:start}
-  .show{grid-template-columns:1fr;gap:9px}
+  .show{grid-template-columns:1fr;gap:10px}
   .show-link{justify-self:start}
+  .show-date{padding-top:0}
+  .show-thumb{width:86px}
   .nav-links{width:100%;margin-left:0;justify-content:space-between;overflow-x:auto;padding-bottom:8px}
   .nav-in{min-height:auto;padding-top:12px}
 }
@@ -350,8 +372,8 @@ footer{border-top:var(--rule);padding-block:26px}
 
 <section class="section" id="feed"><div class="wrap">
   <div class="section-head reveal"><h2>Feed</h2><span class="section-note">Straight from our socials</span></div>
+  <p class="feed-intro reveal" id="feedIntro"></p>
   <div class="feed reveal" id="feedList"></div>
-  <div class="social-row reveal" id="socialRow" style="margin-top:30px"></div>
 </div></section>
 <div class="plaid plaid-rule" aria-hidden="true"></div>
 
@@ -592,13 +614,34 @@ function renderIdentity(){
   if(state.assets.mascot) $("#mascot").src=state.assets.mascot;
 }
 
+function mapsUrl(s){
+  var q=[s.venue,s.address].filter(Boolean).join(", ");
+  return "https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(q);
+}
+function telHref(p){ return "tel:"+String(p).replace(/[^\d+]/g,""); }
+
 function showRow(s,past){
   var d=parseDay(s.date);
-  var meta=[s.city,s.time,s.note].filter(Boolean).join("  &middot;  ");
+  var meta=[s.city,s.time].filter(Boolean).join("  &middot;  ");
+  var thumb = s.photo
+    ? '<div class="show-thumb"><img src="'+esc(s.photo)+'" alt="'+esc(s.venue)+'" loading="lazy"></div>'
+    : '';
+  var links=[];
+  if(s.address) links.push('<a class="show-detail" href="'+esc(mapsUrl(s))+'" target="_blank" rel="noopener">'+
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 14.5 9 2.5 2.5 0 0 1 12 11.5z"/></svg>'+
+    esc(s.address)+'</a>');
+  if(s.phone) links.push('<a class="show-detail" href="'+esc(telHref(s.phone))+'">'+
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.58 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.4 11.4 0 0 0 .57 3.6 1 1 0 0 1-.25 1z"/></svg>'+
+    esc(s.phone)+'</a>');
   var btn=(!past&&s.tickets)?'<a class="show-link" href="'+esc(s.tickets)+'" target="_blank" rel="noopener">Tickets</a>':'<span></span>';
-  return '<div class="show'+(past?" past":"")+'"><div class="show-date">'+fmtDay(d)+'</div><div>'+
-   '<div class="show-venue">'+esc(s.venue)+'</div>'+(meta?'<div class="show-meta">'+meta+'</div>':'')+
-   '</div>'+btn+'</div>';
+  return '<div class="show'+(past?" past":"")+'">'+
+    '<div class="show-date">'+fmtDay(d)+'</div>'+
+    '<div class="show-body">'+thumb+'<div class="show-text">'+
+      '<div class="show-venue">'+esc(s.venue)+'</div>'+
+      (meta?'<div class="show-meta">'+meta+'</div>':'')+
+      (links.length?'<div class="show-details">'+links.join("")+'</div>':'')+
+      (s.note?'<div class="show-note">'+esc(s.note)+'</div>':'')+
+    '</div></div>'+btn+'</div>';
 }
 function renderShows(){
   var today=new Date(); today.setHours(0,0,0,0);
@@ -699,11 +742,31 @@ function runScripts(container){
   });
 }
 var igLoaded=false;
+function followPanel(){
+  var live=(state.socials||[]).filter(function(s){return s&&s.url;});
+  var links = live.length ? '<div class="social-row">'+live.map(function(s){
+      return '<a class="social" href="'+esc(s.url)+'" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true">'+
+        (ICONS[s.icon]||ICONS.link)+'</svg>'+esc(s.name)+'</a>'; }).join("")+'</div>' : '';
+  return '<div class="feed-follow">'+
+    '<h3>Come find us</h3>'+
+    '<p>New dates, new songs, and whatever happened at the last show all land on our socials first.</p>'+
+    links+
+    '<div class="feed-cta">'+
+      '<a class="btn" href="#mailing">Join the mailing list</a>'+
+      '<a class="btn ghost" href="#shows">See upcoming shows</a>'+
+    '</div></div>';
+}
 function renderFeed(){
   var e=(state.embeds||[]).filter(function(x){return x&&x.html;});
   var box=$("#feedList");
-  box.innerHTML = e.length ? e.map(function(x){ return '<div class="feed-item">'+x.html+'</div>'; }).join("")
-    : '<div class="empty" style="grid-column:1/-1"><strong>No embeds yet</strong>Paste an Instagram, YouTube, or Facebook embed code in the admin panel.</div>';
+  $("#feedIntro").textContent = e.length
+    ? "The latest from our socials, pulled in live. Give us a follow and you will not miss a date."
+    : "";
+  $("#feedIntro").style.display = e.length ? "" : "none";
+  box.innerHTML = (e.length
+      ? e.map(function(x){ return '<div class="feed-item">'+x.html+'</div>'; }).join("")
+      : '<div class="empty"><strong>No embeds yet</strong>Paste an Instagram, YouTube, or Facebook embed code in the admin panel.</div>'
+    ) + followPanel();
   runScripts(box);
   if(/instagram-media/.test(box.innerHTML)){
     if(!igLoaded){ igLoaded=true; var s=document.createElement("script"); s.async=true; s.src="https://www.instagram.com/embed.js"; document.body.appendChild(s); }
@@ -711,12 +774,7 @@ function renderFeed(){
   }
 }
 
-function renderSocials(){
-  var live=(state.socials||[]).filter(function(s){return s&&s.url;});
-  $("#socialRow").innerHTML = live.length ? live.map(function(s){
-    return '<a class="social" href="'+esc(s.url)+'" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true">'+
-      (ICONS[s.icon]||ICONS.link)+'</svg>'+esc(s.name)+'</a>'; }).join("") : "";
-}
+function renderSocials(){ /* social buttons now live inside the feed panel */ }
 
 function renderAll(){ applyTheme(); renderIdentity(); renderShows(); renderTracks(); renderMembers();
   renderAlbums(); renderPhotos(); renderMerch(); renderFeed(); renderSocials(); bindGallery(); }
@@ -879,9 +937,11 @@ function buildAdmin(){
   buildList("socials","#p-socials",[["name","Name","text"],["url","Link","url"],["icon","Icon","select",Object.keys(ICONS)]],
     function(){return {name:"New link",url:"",icon:"link"};},"Add social link",
     "Every platform you are on. Blank links are hidden on the site.");
-  buildList("shows","#p-shows",[["date","Date","date"],["venue","Venue","text"],["city","City","text"],["time","Time","text"],["tickets","Ticket link","url"],["note","Note","text"]],
-    function(){return {date:new Date().toISOString().slice(0,10),venue:"",city:"Lexington, KY",time:"",tickets:"",note:""};},"Add show",
-    "Dates in the past move themselves to the Played list. No cleanup needed.");
+  buildList("shows","#p-shows",[["date","Date","date"],["venue","Venue","text"],["city","City","text"],["time","Time","text"],
+      ["address","Street address","text"],["phone","Phone","text"],["photo","Venue photo","image"],
+      ["tickets","Ticket link","url"],["note","Note","text"]],
+    function(){return {date:new Date().toISOString().slice(0,10),venue:"",city:"Lexington, KY",time:"",address:"",phone:"",photo:"",tickets:"",note:""};},"Add show",
+    "Dates in the past move themselves to the Played list. Fill in the address and it becomes a Google Maps link; fill in the phone and it becomes tap-to-call on a phone.");
   buildList("tracks","#p-music",[["title","Title","text"],["note","Note","textarea"],["embed","Player embed URL","url"],["height","Player height","number"],["links","Buttons, one per line as Label | URL","textarea","links"]],
     function(){return {title:"New song",note:"",embed:"",height:152,links:[]};},"Add song",
     "For the player: on Spotify use Share, then Embed, and copy the src address. For YouTube use https://www.youtube.com/embed/VIDEO_ID.");
