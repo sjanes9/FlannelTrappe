@@ -53,7 +53,7 @@
     // Worker, not the browser, so it holds even against a tampered page.
     //
     //     printf '%s' 'the-band-key' | shasum -a 256
-    "BAND_KEY_SHA256": "PASTE_BAND_KEY_HASH_HERE"
+    "BAND_KEY_SHA256": "56514b9e9d73e7c149dff110b70bc4becf500ea14ffa7fc1e86a6742c296851f"
   },
 
   "observability": {
